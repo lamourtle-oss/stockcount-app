@@ -38,6 +38,11 @@ details{margin-top:10px;font-size:14px}ul{padding-left:18px}li{margin:4px 0}
 table{width:100%;border-collapse:collapse;font-size:14px;background:#fff}
 th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
 
+/* ป้ายเด้งผลการบันทึก (มือถือ) */
+.toast{position:fixed;left:12px;right:12px;top:14px;z-index:9999;padding:16px 18px;border-radius:12px;font-size:18px;font-weight:700;line-height:1.35;box-shadow:0 6px 24px rgba(0,0,0,.28);display:none;text-align:center}
+.toast.ok{background:#1b7f3b;color:#fff}
+.toast.bad{background:#b3261e;color:#fff}
+
 </style>
 </head>
 <body>
@@ -116,6 +121,14 @@ th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
 
   // ---------- utils ----------
   const msg = (el, text, ok = false) => { el.textContent = text || ""; el.className = "msg" + (ok ? " ok" : ""); };
+  // ป้ายเด้งกลางจอ — ผลการบันทึกต้องเห็นชัดบนมือถือ (ข้อความบรรทัดเล็กเหนือปุ่มมองข้ามง่าย)
+  const toast = (text, ok = false) => {
+    let t = $("toast"); if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
+    t.textContent = text; t.className = "toast " + (ok ? "ok" : "bad"); t.style.display = "block";
+    clearTimeout(toast._h); toast._h = setTimeout(() => { t.style.display = "none"; }, ok ? 3500 : 6000);
+    try { navigator.vibrate && navigator.vibrate(ok ? [40, 40, 40] : [200]); } catch (_) {}
+  };
+  const saveMsg = (text, ok = false) => { msg($("scanMsg"), text, ok); toast(text, ok); };
   const API = (typeof window.SC_API_BASE === "string" && window.SC_API_BASE) || "/api";
   const withTok = (url) => { const tok = LS.get("sc_token") || ""; return tok ? url + (url.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(tok) : url; };
   const api = async (path, opt = {}) => {
@@ -197,7 +210,7 @@ th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
   }
 
   // พิมพ์เอง = manual (ต้องมีรูป + เหตุผล)
-  $("serial").addEventListener("input", () => { if (S.method === "scan") setMethod("manual"); });
+  $("serial").addEventListener("input", () => { if (S.method !== "manual") { setMethod("manual"); S.ocrRaw = ""; msg($("scanMsg"), "แก้ serial เอง → บันทึกเป็น MANUAL (ต้องแนบรูป + เหตุผล)"); } });
   $("photo").addEventListener("change", () => { const f = $("photo").files[0]; $("photoName").textContent = f ? `${f.name} (${Math.round(f.size / 1024)} KB)` : ""; });
 
   // ---------- OCR assist (ตัวช่วยเติมค่า — ผู้นับต้องยืนยัน) ----------
@@ -221,15 +234,15 @@ th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
   // ---------- save ----------
   $("btnSave").onclick = async () => {
     const serial = $("serial").value.replace(/\s/g, "").toUpperCase(); const m = modelOf($("model").value);
-    if (!$("branch").value) return msg($("scanMsg"), "เลือกสาขา");
-    if (!m) return msg($("scanMsg"), "เลือกรุ่นสินค้า");
-    if (!serial) return msg($("scanMsg"), "ยังไม่มี serial");
-    if (!m.count_by_qty && m.serial_prefix && !serial.startsWith(m.serial_prefix)) return msg($("scanMsg"), `serial ของรุ่น ${m.model} ต้องขึ้นต้นด้วย ${m.serial_prefix} (ตรวจ ISJ/1SJ)`);
-    if (!m.count_by_qty && m.serial_len && serial.length !== m.serial_len) return msg($("scanMsg"), `serial ของรุ่นนี้ต้องยาว ${m.serial_len} ตัวอักษร`);
-    if (!m.count_by_qty && +$("qty").value !== 1) return msg($("scanMsg"), "รุ่นที่มี serial บันทึกทีละเครื่อง (จำนวน = 1)");
+    if (!$("branch").value) return saveMsg( "เลือกสาขา");
+    if (!m) return saveMsg( "เลือกรุ่นสินค้า");
+    if (!serial) return saveMsg( "ยังไม่มี serial");
+    if (!m.count_by_qty && m.serial_prefix && !serial.startsWith(m.serial_prefix)) return saveMsg( `serial ของรุ่น ${m.model} ต้องขึ้นต้นด้วย ${m.serial_prefix} (ตรวจ ISJ/1SJ)`);
+    if (!m.count_by_qty && m.serial_len && serial.length !== m.serial_len) return saveMsg( `serial ของรุ่นนี้ต้องยาว ${m.serial_len} ตัวอักษร`);
+    if (!m.count_by_qty && +$("qty").value !== 1) return saveMsg( "รุ่นที่มี serial บันทึกทีละเครื่อง (จำนวน = 1)");
     const photo = $("photo").files[0];
-    if (S.method !== "scan" && !photo) return msg($("scanMsg"), "บันทึกด้วยมือ/OCR ต้องแนบรูปป้าย serial");
-    if (S.method === "manual" && !$("remark").value.trim()) return msg($("scanMsg"), "บันทึกด้วยมือต้องระบุเหตุผล");
+    if (S.method !== "scan" && !photo) return saveMsg( "บันทึกด้วยมือ/OCR ต้องแนบรูปป้าย serial");
+    if (S.method === "manual" && !$("remark").value.trim()) return saveMsg( "บันทึกด้วยมือต้องระบุเหตุผล");
 
     const fd = new FormData();
     Object.entries({ branch: $("branch").value, model: m.model, serial, qty: $("qty").value, method: S.method, count_round: $("round").value,
@@ -238,10 +251,10 @@ th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
     $("btnSave").disabled = true;
     try {
       const r = await api("/api/count", { method: "POST", body: fd });
-      msg($("scanMsg"), `✔ ${r.message} (${serial})`, true); navigator.vibrate && navigator.vibrate([40, 40, 40]); resetForm(); refreshRecent();
+      saveMsg(`✔ ${r.message} (${serial})`, true); navigator.vibrate && navigator.vibrate([40, 40, 40]); resetForm(); refreshRecent();
     } catch (e) {
       if (e.message.startsWith("HTTP") || /Failed to fetch/i.test(e.message)) { queueOffline(fd, photo); }
-      else msg($("scanMsg"), e.message);
+      else saveMsg(e.message);
     } finally { $("btnSave").disabled = false; }
   };
   function resetForm() { $("serial").value = ""; $("qty").value = 1; $("remark").value = ""; $("photo").value = ""; $("photoName").textContent = ""; $("ocrBox").hidden = true; setMethod("scan"); S.ocrRaw = ""; }
@@ -252,7 +265,7 @@ th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
     if (photo) item.photo_b64 = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(photo); });
     item.queued_at = new Date().toISOString(); item.remark = (item.remark ? item.remark + " | " : "") + "บันทึกออฟไลน์ " + item.queued_at.slice(0, 16);
     const q = JSON.parse(LS.get(QKEY) || "[]"); q.push(item); LS.set(QKEY, JSON.stringify(q));
-    msg($("scanMsg"), "ออฟไลน์ — เก็บไว้บนเครื่องแล้ว จะส่งอัตโนมัติเมื่อมีสัญญาณ", true); resetForm(); updateQueueInfo();
+    saveMsg("ออฟไลน์ — เก็บไว้บนเครื่องแล้ว จะส่งอัตโนมัติเมื่อมีสัญญาณ", true); resetForm(); updateQueueInfo();
   }
   function updateQueueInfo() { const n = JSON.parse(LS.get(QKEY) || "[]").length; $("queueInfo").textContent = n ? `ค้างส่ง ${n} รายการ` : ""; }
   async function flushQueue() {
