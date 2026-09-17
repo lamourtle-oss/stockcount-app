@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>แอปสแกนตรวจนับ</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;background:#f6f6f6;color:#222;font-size:16px}
+header{background:#7f0000;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:600}
+header #hdrUser{font-size:13px;font-weight:400;opacity:.9}
+.view{max-width:560px;margin:0 auto;padding:14px 16px 32px}
+h2{font-size:18px;margin:8px 0 12px}
+h3{font-size:16px;margin:18px 0 8px}
+label{display:block;margin:10px 0 4px;font-size:14px;color:#444}
+input,select{width:100%;padding:12px;font-size:17px;border:1px solid #bbb;border-radius:8px;background:#fff;margin-top:4px}
+input:focus,select:focus{outline:2px solid #7f0000;border-color:#7f0000}
+button{width:100%;padding:12px;font-size:16px;border:0;border-radius:8px;cursor:pointer;margin-top:10px}
+button.primary{background:#7f0000;color:#fff;font-weight:600}
+button.primary:disabled{background:#c9a3a3}
+button.big{padding:16px;font-size:18px}
+button.ghost{background:#fff;border:1px solid #7f0000;color:#7f0000}
+.row.two{display:flex;gap:10px}.row.two>*{flex:1}
+.method{display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:6px;font-size:14px;color:#444}
+.method b{font-size:18px;margin-top:6px}.method b.scan{color:#0a7a2f}.method b.manual,.method b.ocr{color:#c00000}
+.filebtn{display:block;background:#fff;border:1px dashed #7f0000;border-radius:8px;padding:12px;text-align:center;color:#7f0000;cursor:pointer;margin-top:10px}
+.filebtn span{display:block;font-size:12px;color:#666;margin-top:4px}
+#reader{margin:10px 0;border-radius:8px;overflow:hidden}
+.msg{min-height:22px;color:#c00000;font-weight:600;margin:8px 0}
+.msg.ok{color:#0a7a2f}
+.footer-row{display:flex;justify-content:space-between;font-size:13px;color:#555;margin-top:14px}
+.footer-row a{color:#7f0000}
+details{margin-top:10px;font-size:14px}ul{padding-left:18px}li{margin:4px 0}
+#ocrBox{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px;margin-top:8px;font-size:14px}
+#ocrBox button{margin-top:6px;padding:8px}
+.cand{display:flex;gap:8px;align-items:center;margin:4px 0}.cand code{font-size:17px;font-weight:700}
+.cand .bad{color:#c00000;font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:14px;background:#fff}
+th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
+
+</style>
+</head>
+<body>
+<header><span id="hdrTitle">แอปสแกนตรวจนับ</span><span id="hdrUser"></span></header>
+
+<!-- ===== หน้าเข้าสู่ระบบ ===== -->
+<section id="viewLogin" class="view">
+  <h2>เข้าสู่ระบบ</h2>
+  <label>รหัสพนักงาน<input id="loginId" autocomplete="username" autocapitalize="characters"></label>
+  <label>PIN<input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password"></label>
+  <button id="btnLogin" class="primary">เข้าสู่ระบบ</button>
+  <p class="msg" id="loginMsg"></p>
+</section>
+
+<!-- ===== หน้าสแกน (blind count: ไม่แสดงยอดตามระบบโดยเจตนา) ===== -->
+<section id="viewScan" class="view" hidden>
+  <div class="row two">
+    <label>สาขา <select id="branch"></select></label>
+    <label>รอบ <select id="round"><option value="1">1</option><option value="2">2 (นับซ้ำโดยผู้อื่น)</option></select></label>
+  </div>
+  <button id="btnScan" class="primary big">📷 สแกนบาร์โค้ด / QR</button>
+  <div id="reader" hidden></div>
+  <label>รุ่นสินค้า <select id="model"><option value="">— เลือกรุ่น —</option></select></label>
+  <label>หมายเลขเครื่อง (serial)
+    <input id="serial" autocapitalize="characters" autocomplete="off" placeholder="ได้จากการสแกน หรือพิมพ์เมื่อบาร์โค้ดฉีกขาด">
+  </label>
+  <div class="row two">
+    <label>จำนวน <input id="qty" type="number" min="1" value="1" inputmode="numeric"></label>
+    <div class="method"><span>วิธี</span><b id="methodLabel" class="scan">SCAN</b></div>
+  </div>
+  <div id="photoBlock">
+    <label class="filebtn">📸 ถ่ายรูปป้าย serial <span id="photoName"></span>
+      <input id="photo" type="file" accept="image/*" capture="environment" hidden></label>
+    <button id="btnOcr" class="ghost" hidden>🔍 อ่าน serial จากรูป (OCR)</button>
+    <div id="ocrBox" hidden></div>
+  </div>
+  <label>เหตุผล / หมายเหตุ <input id="remark" placeholder="บังคับเมื่อบันทึกด้วยมือ เช่น บาร์โค้ดฉีกขาด"></label>
+  <p class="msg" id="scanMsg"></p>
+  <button id="btnSave" class="primary big">✅ บันทึกผลนับ</button>
+  <div class="footer-row">
+    <span id="todayCount"></span>
+    <span id="queueInfo"></span>
+    <a href="#" id="linkLogout">ออกจากระบบ</a>
+  </div>
+  <details><summary>รายการล่าสุดของฉัน</summary><ul id="recent"></ul></details>
+</section>
+
+<!-- ===== หน้าผู้ตรวจสอบ ===== -->
+<section id="viewAudit" class="view" hidden>
+  <h2>สรุปงวด <input id="auditPeriod" size="7"> <button id="btnAuditLoad" class="ghost">โหลด</button></h2>
+  <table id="auditTable"><thead><tr><th>สาขา</th><th>รายการ</th><th>จำนวน</th><th>ต้องสอบทาน</th><th>รอบ 2</th><th>ผู้นับ</th></tr></thead><tbody></tbody></table>
+  <p><a id="linkExport" href="#">⬇ ดาวน์โหลด stockcount_export.csv (ส่งระบบกระทบยอด)</a></p>
+  <h3>รายการ manual/OCR ที่ต้องเปิดดูรูปเทียบ</h3>
+  <ul id="reviewList"></ul>
+  <p><a href="#" id="linkBackScan">← กลับหน้าสแกน</a></p>
+</section>
+
+<script>window.SC_API_BASE = "https://n8n-ia.singerthai.xyz/webhook/stockcount";</script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+/* แอปสแกนตรวจนับ — ฝั่งเบราว์เซอร์ (เตือนเร็วที่หน้างาน; เซิร์ฟเวอร์เป็นผู้ตัดสินสุดท้าย) */
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const S = { user: null, branches: [], models: [], method: "scan", scanner: null, ocrEnabled: false, ocrRaw: "" };
+  const QKEY = "stockcount_queue_v1";
+  // ที่เก็บค่าแบบทนต่อหน้าที่ถูก sandbox (n8n ส่ง CSP sandbox → localStorage ใช้ไม่ได้) : localStorage → sessionStorage → หน่วยความจำ + URL hash
+  const MEM = {};
+  const LS = {
+    get(k) { try { const v = localStorage.getItem(k); if (v !== null) return v; } catch (_) {} try { const v = sessionStorage.getItem(k); if (v !== null) return v; } catch (_) {}
+      if (k === "sc_token" && location.hash.startsWith("#t=")) return decodeURIComponent(location.hash.slice(3)); return MEM[k] ?? null; },
+    set(k, v) { MEM[k] = v; try { localStorage.setItem(k, v); return; } catch (_) {} try { sessionStorage.setItem(k, v); } catch (_) {}
+      if (k === "sc_token") { try { history.replaceState(null, "", "#t=" + encodeURIComponent(v)); } catch (_) {} } },
+    del(k) { delete MEM[k]; try { localStorage.removeItem(k); } catch (_) {} try { sessionStorage.removeItem(k); } catch (_) {}
+      if (k === "sc_token") { try { history.replaceState(null, "", location.pathname); } catch (_) {} } },
+  };
+
+  // ---------- utils ----------
+  const msg = (el, text, ok = false) => { el.textContent = text || ""; el.className = "msg" + (ok ? " ok" : ""); };
+  const API = (typeof window.SC_API_BASE === "string" && window.SC_API_BASE) || "/api";
+  const withTok = (url) => { const tok = LS.get("sc_token") || ""; return tok ? url + (url.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(tok) : url; };
+  const api = async (path, opt = {}) => {
+    const url = withTok(API + path.replace(/^\/api/, ""));
+    const r = await fetch(url, { credentials: "same-origin", ...opt });
+    let body = null; try { body = await r.json(); } catch (_) { /* ignore */ }
+    if (!r.ok) throw new Error((body && (body.detail || body.message)) || `HTTP ${r.status}`);
+    return body;
+  };
+  const show = (id) => ["viewLogin", "viewScan", "viewAudit"].forEach((v) => ($(v).hidden = v !== id));
+  const setMethod = (m) => { S.method = m; const b = $("methodLabel"); b.textContent = m.toUpperCase(); b.className = m; };
+  const ean13ok = (c) => /^[0-9]{13}$/.test(c) && ((10 - ([...c.slice(0, 12)].reduce((s, d, i) => s + +d * (i % 2 ? 3 : 1), 0) % 10)) % 10) === +c[12];
+  const modelOf = (code) => S.models.find((m) => m.model === code);
+  // ย่อรูปก่อนส่ง (ลดขนาดไฟล์/โทเคน) → JPEG
+  const shrink = (file, max = 1600, q = 0.85) => new Promise((res) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => { const sc = Math.min(1, max / Math.max(img.width, img.height)); const cv = document.createElement("canvas");
+      cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url); cv.toBlob((b) => res(b || file), "image/jpeg", q); };
+    img.onerror = () => { URL.revokeObjectURL(url); res(file); }; img.src = url; });
+  const toB64 = (blob) => new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.readAsDataURL(blob); });
+
+  // ---------- login ----------
+  $("btnLogin").onclick = async () => {
+    msg($("loginMsg"), "");
+    const fd = new FormData(); fd.append("staff_id", $("loginId").value.trim()); fd.append("pin", $("loginPin").value);
+    try { S.user = await api("/api/login", { method: "POST", body: fd }); LS.set("sc_token", S.user.token); await enter(); }
+    catch (e) { msg($("loginMsg"), e.message); }
+  };
+  $("loginPin").addEventListener("keydown", (e) => { if (e.key === "Enter") $("btnLogin").click(); });
+  $("linkLogout").onclick = async (e) => { e.preventDefault(); LS.del("sc_token"); location.reload(); };
+
+  async function enter() {
+    S.ocrEnabled = !!S.user.ocr;
+    $("hdrUser").textContent = `${S.user.name} · งวด ${S.user.period}` + (S.user.role !== "counter" ? ` · ${S.user.role}` : "");
+    [S.branches, S.models] = await Promise.all([api("/api/branches"), api("/api/models")]);
+    $("branch").innerHTML = S.branches.map((b) => `<option value="${b.code}">${b.code} ${b.name}</option>`).join("");
+    if (S.user.branch_default) $("branch").value = S.user.branch_default;
+    $("model").innerHTML = '<option value="">— เลือกรุ่น —</option>' + S.models.map((m) => `<option value="${m.model}">${m.model} ${m.model_name || ""}</option>`).join("");
+    $("btnOcr").hidden = !S.ocrEnabled;
+    if (S.user.role !== "counter") {
+      const a = document.createElement("a"); a.href = "#"; a.textContent = "หน้าผู้ตรวจสอบ"; a.onclick = (e) => { e.preventDefault(); openAudit(); };
+      $("linkLogout").before(a);
+    }
+    show("viewScan"); refreshRecent(); flushQueue();
+  }
+
+  // ---------- barcode scanner (ตาราง 3.3) ----------
+  $("btnScan").onclick = async () => {
+    if (S.scanner) { await stopScan(); return; }
+    $("reader").hidden = false; $("btnScan").textContent = "⏹ หยุดสแกน";
+    S.scanner = new Html5Qrcode("reader", { formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.DATA_MATRIX, Html5QrcodeSupportedFormats.ITF] });
+    try {
+      await S.scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 260, height: 160 } }, onScan, () => {});
+    } catch (e) { msg($("scanMsg"), "เปิดกล้องไม่ได้: " + e); await stopScan(); }
+  };
+  async function stopScan() { try { await S.scanner.stop(); S.scanner.clear(); } catch (_) {} S.scanner = null; $("reader").hidden = true; $("btnScan").textContent = "📷 สแกนบาร์โค้ด / QR"; }
+
+  async function onScan(text) {
+    const code = text.trim(); await stopScan(); navigator.vibrate && navigator.vibrate(60);
+    if (/^00[0-9]{7,9}$/.test(code)) return msg($("scanMsg"), "สแกนโดนรหัสลัง — ให้สแกนป้าย serial ของเครื่อง");
+    if (/^https?:\/\//i.test(code) || /^(มอก\.?|TIS)\s*[0-9]+/i.test(code)) return msg($("scanMsg"), "ไม่ใช่ serial สินค้า (QR ใบส่งของ / เลข มอก.)");
+    if (/^[0-9]{13}$/.test(code)) {
+      if (!ean13ok(code)) return msg($("scanMsg"), "เลข 13 หลักแต่ check digit ไม่ถูก — สแกนใหม่");
+      const m = S.models.find((x) => x.ean_code === code);
+      if (!m) return msg($("scanMsg"), "EAN นี้ไม่อยู่ในทะเบียนรุ่น");
+      $("model").value = m.model;
+      if (m.count_by_qty) { $("serial").value = code; setMethod("scan"); $("qty").focus(); return msg($("scanMsg"), `รุ่นนับตามจำนวน (${m.model}) — ระบุจำนวนในช่อง qty`, true); }
+      $("serial").value = ""; return msg($("scanMsg"), `สแกนโดนบาร์โค้ดรุ่น ${m.model} ไม่ใช่ serial เครื่อง — สแกนป้าย serial`);
+    }
+    $("serial").value = code.toUpperCase(); setMethod("scan"); S.ocrRaw = "";
+    const m = modelOf($("model").value);
+    if (!m) { // เดารุ่นจาก prefix
+      const g = S.models.filter((x) => x.serial_prefix && code.toUpperCase().startsWith(x.serial_prefix));
+      if (g.length === 1) $("model").value = g[0].model;
+    }
+    msg($("scanMsg"), "สแกนได้: " + code, true);
+  }
+
+  // พิมพ์เอง = manual (ต้องมีรูป + เหตุผล)
+  $("serial").addEventListener("input", () => { if (S.method === "scan") setMethod("manual"); });
+  $("photo").addEventListener("change", () => { const f = $("photo").files[0]; $("photoName").textContent = f ? `${f.name} (${Math.round(f.size / 1024)} KB)` : ""; });
+
+  // ---------- OCR assist (ตัวช่วยเติมค่า — ผู้นับต้องยืนยัน) ----------
+  $("btnOcr").onclick = async () => {
+    const f = $("photo").files[0]; if (!f) return msg($("scanMsg"), "ถ่ายรูปป้าย serial ก่อน แล้วกดอ่าน OCR");
+    $("btnOcr").disabled = true; $("ocrBox").hidden = false; $("ocrBox").textContent = "กำลังอ่าน...";
+    try {
+      const small = await shrink(f, 1280, 0.8); const b64 = await toB64(small);
+      const of = new FormData(); of.append("model", $("model").value); of.append("mime", "image/jpeg"); of.append("b64", b64);
+      const r = await api("/api/ocr", { method: "POST", body: of });
+      S.ocrRaw = JSON.stringify(r.raw || {});
+      if (!r.candidates.length) { $("ocrBox").textContent = "อ่านไม่ได้ — พิมพ์เองพร้อมแนบรูป"; return; }
+      $("ocrBox").innerHTML = `<div>ผลอ่าน (ความมั่นใจ ${Math.round((r.confidence || 0) * 100)}%) — <b>เทียบกับป้ายจริงก่อนเลือก</b></div>` +
+        r.candidates.map((c) => `<div class="cand"><code>${c.serial}</code>${c.passes_pattern ? "" : `<span class="bad">${c.message || "ไม่ตรงรูปแบบรุ่น"}</span>`}<button class="ghost" data-s="${c.serial}">ใช้ค่านี้</button></div>`).join("") +
+        (r.model_on_label ? `<div>รุ่นบนป้าย: ${r.model_on_label}</div>` : "");
+      $("ocrBox").querySelectorAll("button").forEach((b) => (b.onclick = () => { $("serial").value = b.dataset.s; setMethod("ocr"); msg($("scanMsg"), "เลือกค่าจาก OCR แล้ว — ตรวจกับป้ายจริงก่อนบันทึก", true); }));
+    } catch (e) { $("ocrBox").textContent = "OCR ล้มเหลว: " + e.message; }
+    finally { $("btnOcr").disabled = false; }
+  };
+
+  // ---------- save ----------
+  $("btnSave").onclick = async () => {
+    const serial = $("serial").value.replace(/\s/g, "").toUpperCase(); const m = modelOf($("model").value);
+    if (!$("branch").value) return msg($("scanMsg"), "เลือกสาขา");
+    if (!m) return msg($("scanMsg"), "เลือกรุ่นสินค้า");
+    if (!serial) return msg($("scanMsg"), "ยังไม่มี serial");
+    if (!m.count_by_qty && m.serial_prefix && !serial.startsWith(m.serial_prefix)) return msg($("scanMsg"), `serial ของรุ่น ${m.model} ต้องขึ้นต้นด้วย ${m.serial_prefix} (ตรวจ ISJ/1SJ)`);
+    if (!m.count_by_qty && m.serial_len && serial.length !== m.serial_len) return msg($("scanMsg"), `serial ของรุ่นนี้ต้องยาว ${m.serial_len} ตัวอักษร`);
+    if (!m.count_by_qty && +$("qty").value !== 1) return msg($("scanMsg"), "รุ่นที่มี serial บันทึกทีละเครื่อง (จำนวน = 1)");
+    const photo = $("photo").files[0];
+    if (S.method !== "scan" && !photo) return msg($("scanMsg"), "บันทึกด้วยมือ/OCR ต้องแนบรูปป้าย serial");
+    if (S.method === "manual" && !$("remark").value.trim()) return msg($("scanMsg"), "บันทึกด้วยมือต้องระบุเหตุผล");
+
+    const fd = new FormData();
+    Object.entries({ branch: $("branch").value, model: m.model, serial, qty: $("qty").value, method: S.method, count_round: $("round").value,
+      remark: $("remark").value.trim(), ocr_raw: S.method === "ocr" ? S.ocrRaw : "", device_info: navigator.userAgent.slice(0, 200) }).forEach(([k, v]) => fd.append(k, v));
+    if (photo) fd.append("photo", await shrink(photo, 1600, 0.85), "photo.jpg");
+    $("btnSave").disabled = true;
+    try {
+      const r = await api("/api/count", { method: "POST", body: fd });
+      msg($("scanMsg"), `✔ ${r.message} (${serial})`, true); navigator.vibrate && navigator.vibrate([40, 40, 40]); resetForm(); refreshRecent();
+    } catch (e) {
+      if (e.message.startsWith("HTTP") || /Failed to fetch/i.test(e.message)) { queueOffline(fd, photo); }
+      else msg($("scanMsg"), e.message);
+    } finally { $("btnSave").disabled = false; }
+  };
+  function resetForm() { $("serial").value = ""; $("qty").value = 1; $("remark").value = ""; $("photo").value = ""; $("photoName").textContent = ""; $("ocrBox").hidden = true; setMethod("scan"); S.ocrRaw = ""; }
+
+  // ---------- offline queue (สัญญาณสาขาขาดหาย: เก็บบนเครื่อง ส่งซ้ำเมื่อกลับมาออนไลน์) ----------
+  async function queueOffline(fd, photo) {
+    const item = {}; fd.forEach((v, k) => { if (k !== "photo") item[k] = v; });
+    if (photo) item.photo_b64 = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(photo); });
+    item.queued_at = new Date().toISOString(); item.remark = (item.remark ? item.remark + " | " : "") + "บันทึกออฟไลน์ " + item.queued_at.slice(0, 16);
+    const q = JSON.parse(LS.get(QKEY) || "[]"); q.push(item); LS.set(QKEY, JSON.stringify(q));
+    msg($("scanMsg"), "ออฟไลน์ — เก็บไว้บนเครื่องแล้ว จะส่งอัตโนมัติเมื่อมีสัญญาณ", true); resetForm(); updateQueueInfo();
+  }
+  function updateQueueInfo() { const n = JSON.parse(LS.get(QKEY) || "[]").length; $("queueInfo").textContent = n ? `ค้างส่ง ${n} รายการ` : ""; }
+  async function flushQueue() {
+    const q = JSON.parse(LS.get(QKEY) || "[]"); if (!q.length) return updateQueueInfo();
+    const rest = [];
+    for (const it of q) {
+      const fd = new FormData(); Object.entries(it).forEach(([k, v]) => { if (!["photo_b64", "queued_at"].includes(k)) fd.append(k, v); });
+      if (it.photo_b64) { const blob = await (await fetch(it.photo_b64)).blob(); fd.append("photo", blob, "offline.jpg"); }
+      try { await api("/api/count", { method: "POST", body: fd }); }
+      catch (e) { if (e.message.startsWith("HTTP") || /Failed to fetch/i.test(e.message)) rest.push(it); /* ถูกปฏิเสธ (เช่นซ้ำ) = ทิ้ง */ }
+    }
+    LS.set(QKEY, JSON.stringify(rest)); updateQueueInfo(); refreshRecent();
+  }
+  window.addEventListener("online", flushQueue); setInterval(flushQueue, 60000);
+
+  async function refreshRecent() {
+    try { const r = await api("/api/my-recent"); $("todayCount").textContent = `นับแล้วงวดนี้ ${r.today_period_total} รายการ`;
+      $("recent").innerHTML = r.recent.map((x) => `<li>${x.scanned_at.slice(11, 16)} ${x.branch} ${x.model} <b>${x.serial}</b>×${x.qty} ${x.method !== "scan" ? "⚠" + x.method : ""} รอบ${x.count_round}</li>`).join(""); } catch (_) {}
+  }
+
+  // ---------- auditor ----------
+  async function openAudit() { show("viewAudit"); $("auditPeriod").value = S.user.period; loadAudit(); }
+  $("btnAuditLoad").onclick = loadAudit; $("linkBackScan").onclick = (e) => { e.preventDefault(); show("viewScan"); };
+  async function loadAudit() {
+    const p = $("auditPeriod").value.trim(); const s = await api("/api/summary?period=" + p);
+    $("auditTable").querySelector("tbody").innerHTML = s.by_branch.map((b) => `<tr><td>${b.branch}</td><td>${b.items}</td><td>${b.qty}</td><td>${b.needs_review}</td><td>${b.round2}</td><td>${b.counters}</td></tr>`).join("") || "<tr><td colspan=6>ไม่มีข้อมูล</td></tr>";
+    $("linkExport").href = withTok(API + "/export.csv?period=" + p);
+    const rv = await api("/api/review?period=" + p);
+    $("reviewList").innerHTML = rv.map((x) => `<li>${x.branch} ${x.model} <b>${x.serial}</b> (${x.method}, ${x.scanned_by}, ${x.scanned_at.slice(0, 16)}) ${x.remark || ""} ${x.photo_path ? `<a href="${withTok(API + "/photo?id=" + x.id)}" target="_blank">ดูรูป</a>` : ""}</li>`).join("") || "<li>ไม่มี</li>";
+  }
+
+  // ---------- boot ----------
+  api("/api/me").then((u) => { S.user = u; enter(); }).catch(() => show("viewLogin"));
+})();
+
+</script>
+</body>
+</html>
