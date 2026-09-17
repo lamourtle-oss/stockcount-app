@@ -237,8 +237,9 @@ th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
     if (!$("branch").value) return saveMsg( "เลือกสาขา");
     if (!m) return saveMsg( "เลือกรุ่นสินค้า");
     if (!serial) return saveMsg( "ยังไม่มี serial");
-    if (!m.count_by_qty && m.serial_prefix && !serial.startsWith(m.serial_prefix)) return saveMsg( `serial ของรุ่น ${m.model} ต้องขึ้นต้นด้วย ${m.serial_prefix} (ตรวจ ISJ/1SJ)`);
-    if (!m.count_by_qty && m.serial_len && serial.length !== m.serial_len) return saveMsg( `serial ของรุ่นนี้ต้องยาว ${m.serial_len} ตัวอักษร`);
+    if (!m.count_by_qty && m.serial_prefix && !serial.startsWith(m.serial_prefix)) return saveMsg(`serial ของรุ่น ${m.model} ต้องขึ้นต้นด้วย ${m.serial_prefix} — ได้ "${serial}" (ตรวจตัวอักษรคล้ายกัน 0/O, 1/I, 5/S หรือสแกนโดนบาร์โค้ดอื่นบนป้าย)`);
+    if (!m.count_by_qty && m.serial_len && serial.length !== m.serial_len) return saveMsg(`serial ของรุ่น ${m.model} ต้องยาว ${m.serial_len} ตัวอักษร — ได้ ${serial.length} ("${serial}")`);
+    if (!m.count_by_qty && m.serial_pattern) { let re = null; try { re = new RegExp(m.serial_pattern); } catch (_) {} if (re && !re.test(serial)) return saveMsg(`รูปแบบ serial ไม่ตรงกับรุ่น ${m.model} — ได้ "${serial}" (ต้องเป็น ${m.serial_pattern})`); }
     if (!m.count_by_qty && +$("qty").value !== 1) return saveMsg( "รุ่นที่มี serial บันทึกทีละเครื่อง (จำนวน = 1)");
     const photo = $("photo").files[0];
     if (S.method !== "scan" && !photo) return saveMsg( "บันทึกด้วยมือ/OCR ต้องแนบรูปป้าย serial");
