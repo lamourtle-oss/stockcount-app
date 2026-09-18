@@ -192,15 +192,17 @@ th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
     const code = text.trim(); await stopScan(); navigator.vibrate && navigator.vibrate(60);
     if (/^00[0-9]{7,9}$/.test(code)) return msg($("scanMsg"), "สแกนโดนรหัสลัง — ให้สแกนป้าย serial ของเครื่อง");
     if (/^https?:\/\//i.test(code) || /^(มอก\.?|TIS)\s*[0-9]+/i.test(code)) return msg($("scanMsg"), "ไม่ใช่ serial สินค้า (QR ใบส่งของ / เลข มอก.)");
-    if (/^[0-9]{13}$/.test(code)) {
-      if (!ean13ok(code)) return msg($("scanMsg"), "เลข 13 หลักแต่ check digit ไม่ถูก — สแกนใหม่");
-      const m = S.models.find((x) => x.ean_code === code);
-      if (!m) return msg($("scanMsg"), "EAN นี้ไม่อยู่ในทะเบียนรุ่น");
+    const norm = (v) => String(v || "").replace(/[\s\-]/g, "").toUpperCase();
+    const byCode = S.models.find((x) => x.ean_code && norm(x.ean_code) === norm(code));   // บาร์โค้ดรุ่น (EAN-13 หรือ item code ของ ERP)
+    if (/^[0-9]{13}$/.test(code) || byCode) {
+      if (!byCode && !ean13ok(code)) return msg($("scanMsg"), "เลข 13 หลักแต่ check digit ไม่ถูก — สแกนใหม่");
+      const m = byCode;
+      if (!m) return msg($("scanMsg"), "บาร์โค้ดรุ่นนี้ไม่อยู่ในทะเบียนรุ่น");
       $("model").value = m.model;
       if (m.count_by_qty) { $("serial").value = code; setMethod("scan"); $("qty").focus(); return msg($("scanMsg"), `รุ่นนับตามจำนวน (${m.model}) — ระบุจำนวนในช่อง qty`, true); }
       $("serial").value = ""; return msg($("scanMsg"), `สแกนโดนบาร์โค้ดรุ่น ${m.model} ไม่ใช่ serial เครื่อง — สแกนป้าย serial`);
     }
-    $("serial").value = code.toUpperCase(); setMethod("scan"); S.ocrRaw = "";
+    $("serial").value = norm(code); setMethod("scan"); S.ocrRaw = "";
     const m = modelOf($("model").value);
     if (!m) { // เดารุ่นจาก prefix
       const g = S.models.filter((x) => x.serial_prefix && code.toUpperCase().startsWith(x.serial_prefix));
@@ -233,7 +235,7 @@ th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f0e0e0}
 
   // ---------- save ----------
   $("btnSave").onclick = async () => {
-    const serial = $("serial").value.replace(/\s/g, "").toUpperCase(); const m = modelOf($("model").value);
+    const serial = $("serial").value.replace(/[\s\-]/g, "").toUpperCase(); const m = modelOf($("model").value);
     if (!$("branch").value) return saveMsg( "เลือกสาขา");
     if (!m) return saveMsg( "เลือกรุ่นสินค้า");
     if (!serial) return saveMsg( "ยังไม่มี serial");
