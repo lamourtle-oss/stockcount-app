@@ -417,6 +417,7 @@ tr.void td{color:#999;text-decoration:line-through}
 
   // ---------- boot ----------
   recalc();
+  try { const u = new URLSearchParams(location.search).get("u"); if (u) { $("loginId").value = u.trim().toUpperCase(); setTimeout(() => $("loginPin").focus(), 300); } } catch (_) {}   // QR แบบระบุรหัสพนักงาน: ?u=IA_ADMIN
   api("/api/me").then((u) => { S.user = u; enter(); }).catch(() => show("viewLogin"));
 })();
 </script>
