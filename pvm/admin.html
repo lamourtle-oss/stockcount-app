@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>จัดการผู้ใช้ — แอปตรวจสอบภายใน</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;background:#f6f6f6;color:#222;font-size:16px}
+header{background:#7f0000;color:#fff;padding:12px 16px;font-weight:600;display:flex;justify-content:space-between}header span{font-size:13px;font-weight:400;opacity:.9}
+.view{max-width:520px;margin:0 auto;padding:14px 16px 32px}label{display:block;margin:10px 0 4px;font-size:14px;color:#444}
+input,select{width:100%;padding:12px;font-size:17px;border:1px solid #bbb;border-radius:8px;background:#fff;margin-top:4px}
+button{width:100%;padding:14px;font-size:16px;border:0;border-radius:8px;cursor:pointer;margin-top:14px;background:#7f0000;color:#fff;font-weight:600}button:disabled{background:#c9a3a3}
+.msg{min-height:22px;color:#c00000;font-weight:600;margin:8px 0}.msg.ok{color:#0a7a2f}.note{font-size:13px;color:#555;background:#faf3f3;border-radius:8px;padding:10px;margin-top:12px}
+.row{display:flex;gap:10px}.row>*{flex:1}
+</style>
+</head>
+<body>
+<header>จัดการผู้ใช้ (admin)<span id="who"></span></header>
+<section class="view">
+  <div id="needLogin" hidden><p class="msg">ต้องล็อกอินเป็น admin ในแอปก่อน แล้วกลับมาหน้านี้</p><a href="./">← ไปหน้าแอป</a></div>
+  <div id="form" hidden>
+    <p class="note">ใช้สร้างผู้ใช้ใหม่ <b>หรือ</b> ตั้ง PIN ใหม่ให้ผู้ใช้เดิม (ใส่รหัสพนักงานเดิม = เขียนทับ) ผู้ใช้ชุดนี้ใช้ได้ทั้งแอปตรวจนับและแอปตู้น้ำมัน</p>
+    <label>รหัสพนักงาน <input id="sid" autocapitalize="characters" placeholder="เช่น 24957444 หรือ IA_ADMIN"></label>
+    <label>ชื่อ-สกุล <input id="name" placeholder="แสดงในแอปและรายงาน"></label>
+    <div class="row">
+      <label>บทบาท <select id="role"><option value="counter">counter — พนักงานสาขา</option><option value="auditor">auditor — ผู้ตรวจสอบ</option><option value="admin">admin — ผู้ดูแล</option></select></label>
+      <label>สาขาเริ่มต้น <select id="branch"><option value="">— ไม่ระบุ —</option></select></label>
+    </div>
+    <div class="row">
+      <label>PIN ใหม่ (ตัวเลข 4–8 หลัก) <input id="pin" type="password" inputmode="numeric" autocomplete="new-password"></label>
+      <label>ยืนยัน PIN <input id="pin2" type="password" inputmode="numeric" autocomplete="new-password"></label>
+    </div>
+    <button id="btn">บันทึกผู้ใช้ / ตั้ง PIN</button>
+    <p class="msg" id="msg"></p>
+    <p class="note">PIN ถูกเข้ารหัส (salt + HMAC) ก่อนเก็บ ระบบไม่เก็บ PIN ตัวจริง — แจ้ง PIN ตั้งต้นให้พนักงานทางช่องทางส่วนตัวและให้เปลี่ยนเองครั้งแรกโดยใช้หน้านี้ (admin ตั้งให้)</p>
+  </div>
+</section>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const SC = "https://n8n-ia.singerthai.xyz/webhook/stockcount", PVM = "https://n8n-ia.singerthai.xyz/webhook/pvm";
+  const tok = (() => { try { return localStorage.getItem("pvm_token") || localStorage.getItem("sc_token") || ""; } catch (_) { return ""; } })();
+  const api = async (url, opt = {}) => { const r = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(tok), opt); let b = null; try { b = await r.json(); } catch (_) {} if (!r.ok) throw new Error((b && (b.detail || b.message)) || "HTTP " + r.status); return b; };
+  const msg = (t, ok) => { $("msg").textContent = t; $("msg").className = "msg" + (ok ? " ok" : ""); };
+  (async () => {
+    try { const u = await api(PVM + "/me"); if (u.role !== "admin") throw new Error("ไม่ใช่ admin"); $("who").textContent = u.name; $("form").hidden = false;
+      const br = await api(PVM + "/branches"); $("branch").innerHTML += br.map((b) => `<option value="${b.code}">${b.code} ${b.name}</option>`).join(""); }
+    catch (_) { $("needLogin").hidden = false; }
+  })();
+  $("btn").onclick = async () => {
+    const sid = $("sid").value.trim().toUpperCase(), pin = $("pin").value, pin2 = $("pin2").value;
+    if (!/^[A-Z0-9_\-\.]{2,30}$/.test(sid)) return msg("รหัสพนักงานไม่ถูกต้อง (A-Z 0-9 _ - . ยาว 2–30)");
+    if (!/^[0-9]{4,8}$/.test(pin)) return msg("PIN ต้องเป็นตัวเลข 4–8 หลัก");
+    if (pin !== pin2) return msg("PIN ทั้งสองช่องไม่ตรงกัน");
+    if (!$("name").value.trim()) return msg("กรอกชื่อ");
+    if (!confirm(`บันทึกผู้ใช้ ${sid} (${$("role").value})${sid === ($("who").textContent ? "" : "")} — ถ้ามีอยู่แล้วจะตั้ง PIN ใหม่ทับของเดิม ยืนยัน?`)) return;
+    const fd = new FormData(); fd.append("staff_id", sid); fd.append("name", $("name").value.trim()); fd.append("role", $("role").value); fd.append("branch_default", $("branch").value); fd.append("pin", pin);
+    $("btn").disabled = true;
+    try { const r = await api(SC + "/admin/user", { method: "POST", body: fd }); msg(`✔ บันทึกแล้ว: ${sid} (${$("role").value})`, true); $("pin").value = ""; $("pin2").value = ""; }
+    catch (e) { msg(e.message); } finally { $("btn").disabled = false; }
+  };
+})();
+</script>
+</body>
+</html>
